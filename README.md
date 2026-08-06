@@ -2,12 +2,21 @@
 
 ![Anchored continent ringed by converging ocean plates](docs/radial-320-4k.png)
 
-A plate-tectonics simulation for a museum exhibit, ported from Concord Consortium's
-[Tectonic Explorer](https://github.com/concord-consortium/tectonic-explorer) (TypeScript /
-three.js / geodesic sphere) to C# on a **bounded 2D region**.
+A plate-tectonics simulation driving a **12-foot top-down projection** in a museum gallery.
+Visitors push tectonic plates around with their hands and watch what follows: trenches open,
+volcanic arcs light up, mountain ranges grow where continents collide.
 
-Not a faithful port. The geology is carried over; the geometry, the physics ownership, and
-the update semantics are all deliberately different.
+Ported from Concord Consortium's
+[Tectonic Explorer](https://github.com/concord-consortium/tectonic-explorer) (TypeScript /
+three.js / geodesic sphere) to C# on a **bounded 2D region**. Not a faithful port — the
+geology is carried over; the geometry, the physics ownership and the update semantics are all
+deliberately different.
+
+**The exhibit is what explains the code.** Several small plates a visitor can shove, arranged
+around an immovable centre; a region of a larger world rather than a whole planet; running
+unattended all day and rebooted each morning; resetting itself when the room empties. Nearly
+every design decision below follows from one of those.
+**→ [`ARCHITECTURE.md`](ARCHITECTURE.md)** traces each constraint to the decision it forced.
 
 ---
 
@@ -17,8 +26,16 @@ the update semantics are all deliberately different.
 core/       the simulation. NO UnityEngine reference. Plain C#, Unity.Mathematics only.
 headless/   a host that stands in for Unity, so the core can be run and verified offline.
 unity/      the Unity bridge: Rigidbody2D, walls, mesh renderer, settings asset.
-thirdparty/ vendored Unity.Mathematics (MIT) for the headless build.
+tests/      28 tests, ~6 s.
+scripts/    fetch-deps.sh — pulls Unity.Mathematics, which is NOT redistributed here
+            because it is under the Unity Companion License. See NOTICE.md.
 ```
+
+| | |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | why the code is shaped this way, traced back to the exhibit |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | three rules, and the "cleanups" that aren't |
+| [`NOTICE.md`](NOTICE.md) | attribution and third-party licensing |
 
 The split is the point. `core/` is where the bugs will be and where they are hardest to
 debug through a running exhibit, so it is built to run without Unity at all:
@@ -34,7 +51,10 @@ of invariants — exiting non-zero if any fails. `--help` lists the flags. Both 
 
 ---
 
-## The four decisions worth knowing
+## The decisions worth knowing
+
+*Summarised here; the full reasoning, the measurements and the exhibit constraints behind
+each one are in [`ARCHITECTURE.md`](ARCHITECTURE.md).*
 
 ### 1. Everything is a sparse overlay on a hex lattice
 
