@@ -1,0 +1,16 @@
+{
+    "name": "Tectonic.Core",
+    "rootNamespace": "Tectonic",
+    "references": [
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "autoReferenced": true,
+
+    "//": "noEngineReferences is the whole point. The core cannot see UnityEngine, which is",
+    "//2": "what keeps it buildable and testable outside Unity. If this ever flips to false,",
+    "//3": "someone has taken a shortcut that breaks the headless test harness.",
+    "noEngineReferences": true
+}

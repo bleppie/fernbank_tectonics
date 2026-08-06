@@ -1,0 +1,13 @@
+{
+  "name": "Tectonic Explorer — Unity 2D core",
+  "slug": "tectonic-unity",
+  "kind": "library",
+  "runtime": "dotnet",
+  "run_cmd": "./run-headless.sh",
+  "description": "Unity-independent C# geology core for a 2D bounded-region plate tectonics museum exhibit, ported from Concord Consortium's Tectonic Explorer. Jacobi double-buffered, zero per-step allocation, Unity.Mathematics types throughout.",
+  "entrypoints": {
+    "core": "core/TectonicCore.csproj",
+    "headless": "headless/Headless.csproj",
+    "unity_bridge": "unity/Runtime"
+  }
+}

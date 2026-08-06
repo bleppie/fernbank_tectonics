@@ -1,0 +1,13 @@
+{
+    "name": "Tectonic.Bridge",
+    "rootNamespace": "Tectonic.UnityBridge",
+    "references": [
+        "Tectonic.Core",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

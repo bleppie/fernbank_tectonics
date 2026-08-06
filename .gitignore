@@ -104,3 +104,24 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# ---------------------------------------------------------------------------
+# Project-specific (fernbank_tectonics)
+# ---------------------------------------------------------------------------
+
+# Simulation run artifacts — several MB of PNGs per headless run.
+# Hero images referenced by the README live in docs/ and are committed deliberately.
+out*/
+
+# Fetched build dependency. Unity.Mathematics is under the Unity Companion License
+# and is deliberately NOT redistributed here — see NOTICE.md. Run scripts/fetch-deps.sh.
+thirdparty/
+
+# .NET (the headless build and the test project live outside the Unity tree)
+obj/
+bin/
+TestResults/
+
+# IDE
+.idea/
+.vscode/

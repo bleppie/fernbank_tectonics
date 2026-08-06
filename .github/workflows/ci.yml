@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Unity.Mathematics is under the Unity Companion License and is deliberately not
+      # committed to this repository. See NOTICE.md.
+      - name: Fetch dependencies
+        run: ./scripts/fetch-deps.sh
+
+      - name: Build
+        run: dotnet build core/TectonicCore.csproj -c Release
+
+      - name: Unit tests
+        run: dotnet test tests/Tectonic.Tests/Tectonic.Tests.csproj -c Release --logger "console;verbosity=normal"
+
+      # End-to-end: run the exhibit scenario long enough for plate extents to reach
+      # equilibrium, then assert every invariant including steady-state allocation.
+      # Exits non-zero if any of them fails. ~15 s at this resolution.
+      - name: Simulation invariants
+        run: ./run-headless.sh --steps 2500 --res 120 --scenario radial --out "$RUNNER_TEMP/ci"
