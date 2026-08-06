@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets you run this by hand from the Actions tab ("Run workflow"), which is useful
+  # when you want to re-check a green build without pushing anything.
+  workflow_dispatch:
 
 jobs:
   build-and-test:
