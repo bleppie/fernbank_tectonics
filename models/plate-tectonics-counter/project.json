@@ -1,0 +1,11 @@
+{
+  "name": "Plate Tectonics Counter 3D Model",
+  "slug": "plate-tectonics-counter",
+  "kind": "script",
+  "runtime": "python",
+  "build_cmd": ["python3", "-m", "pip", "install", "trimesh", "manifold3d", "numpy", "scipy"],
+  "run_cmd": ["python3", "generate.py"],
+  "entrypoint": "generate.py",
+  "status": "ready",
+  "notes": "Generates a simple watertight 3D solid (OBJ + STL + GLB) of the 8-sided Plate Tectonics Counter museum exhibit table from drawing FM-EX-315 REV 1. Geometry extracted from the vector plan view (scale verified 4.5pt=1in against all 8 labeled outer edges, cross-checked against the raster). Three octagon outlines: outer outline (z=0), first inner line / top of 7.75-in rising border (z=7.75), second inner line / edge of 2-in vertical drop (z=7.75) into the recessed flat center (z=5.75). Four 24-in-class touchscreens (bezel opening ~20.9 x 10.3 in) set into the border on alternating edges 1,3,5,7 as blind recesses cut perpendicular to the ramp so a flat panel mounts flush. Two assumed params: BASE_THICKNESS (default 4 in, slab below outer rim) and SCREEN_RECESS_DEPTH (default 2 in). Verified watertight, single body, euler=2. Overall footprint ~12'-0\" x 12'-8\", matching the plan's 12'-7 5/8\" overall dimension."
+}
