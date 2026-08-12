@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#0a0e14;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const W=1400,H=900;
+const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+r.setSize(W,H); document.body.appendChild(r.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0a0e14);
+const cam=new THREE.PerspectiveCamera(42,W/H,1,200000);
+scene.add(new THREE.HemisphereLight(0xcfe6ff,0x20303a,0.9));
+const sun=new THREE.DirectionalLight(0xffffff,1.6); sun.position.set(-12000,16000,8000); scene.add(sun);
+new GLTFLoader().load('island_terrain.glb',(g)=>{
+  const m=g.scene; scene.add(m);
+  const box=new THREE.Box3().setFromObject(m); const c=box.getCenter(new THREE.Vector3()); const s=box.getSize(new THREE.Vector3());
+  m.position.sub(c);
+  const d=Math.max(s.x,s.z);
+  cam.position.set(d*0.62,d*0.55,d*0.72); cam.lookAt(0,0,0);
+  // subtle vertical exaggeration for the preview only
+  m.scale.y=1.0;
+  r.render(scene,cam);
+  window.__done=true;
+},undefined,(e)=>{document.title='ERR '+e;});
+</script></body></html>
