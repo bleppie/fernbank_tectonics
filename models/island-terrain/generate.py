@@ -22,6 +22,7 @@ import terrain as T
 
 BASE_BELOW = 80.0          # base plane below the ocean floor
 EDGE_MARGIN = 0.45         # drop interior nodes this close (in cells) to the rim
+MIRROR_X = True            # reflect across X to match the client's axis handedness
 
 def resample_loop(poly, step):
     poly = np.asarray(poly)
@@ -102,6 +103,16 @@ def build_mesh(use_cache=False):
     mesh=trimesh.Trimesh(vertices=verts,faces=faces,process=True)
     mesh.fix_normals()
     trimesh.repair.fill_holes(mesh)
+
+    if MIRROR_X:
+        # reflect across X (match the client's coordinate handedness).
+        # a reflection has negative determinant -> it inverts winding, so we
+        # reverse the winding and re-fix normals to keep polygons facing OUT.
+        Rt = np.eye(4); Rt[0,0] = -1.0
+        mesh.apply_transform(Rt)
+        mesh.faces = mesh.faces[:, ::-1]
+        mesh.fix_normals()
+
     return mesh, d
 
 if __name__ == "__main__":
