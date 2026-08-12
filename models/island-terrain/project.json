@@ -3,9 +3,9 @@
   "slug": "island-terrain",
   "kind": "script",
   "runtime": "python",
-  "build_cmd": ["python3", "-m", "pip", "install", "pymupdf", "trimesh", "numpy", "scipy", "shapely", "pillow", "networkx"],
+  "build_cmd": ["python3", "-m", "pip", "install", "pymupdf", "trimesh", "numpy", "scipy", "matplotlib", "pillow", "networkx"],
   "run_cmd": ["python3", "generate.py"],
   "entrypoint": "generate.py",
   "status": "ready",
-  "notes": "Textured 3D island terrain (mountains + ocean floor) built from an elevation-contour guideline PDF and a satellite texture. Units meters, altitude on +Y, sea level Y=0. Contour elevation scheme: domain edge -1500m (ocean floor), coastline 0m, red +500, bright-red +1000, mountain peak +1500. Smooth distance-transform interpolation between contours; peak pinned to exactly +1500, floor -1500. Watertight terrain tile (surface + skirt + base), planar-projected satellite texture. Default horizontal extent ~18.8x20km (TARGET_MAX_EXTENT_M, editable). Outputs OBJ+MTL+PNG and GLB. Verified watertight, elevation range exactly -1500..1500."
+  "notes": "Detailed 3D island terrain -> OBJ. Units meters, altitude +Y, sea level 0, peak +1500m, ocean-floor rim -1500m (outer contour = model limit; sea bed gently slopes out to it). Contour PDF used only as a MACRO guide (peak/coast/boundary), not exact contours. Fine relief generated procedurally to match the reference image's detail level (rugged ridges via domain-warped ridged+fBm noise) then carved with hydraulic erosion (~325k droplets) for dendritic valleys. terrain.py builds the heightfield; generate.py clips to the octagon domain and closes a watertight solid (surface + skirt + base) and exports OBJ+GLB. Peak pinned to +1500, floor -1500, sea level 0. ~261k verts, watertight. Horizontal extent ~18.8x20km (TARGET_MAX_EXTENT_M), grid N=620 (raise for more detail). The provided jpg is a detail reference, NOT a surface texture; final model is geometry only."
 }

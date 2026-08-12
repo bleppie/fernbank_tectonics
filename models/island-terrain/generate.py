@@ -1,164 +1,115 @@
 #!/usr/bin/env python3
 """
-Island terrain 3D model.
+Detailed island-terrain 3D model -> OBJ.
 
-Built from two inputs:
-  * TectonicDashboard_ElevationGuidelines_ForAI.pdf -- a plan-view contour map.
-    Four nested regions define the elevation zones:
-        blue  (outer polygon) ... ocean / model domain edge
-        pink  ................... coastline (sea level)
-        red   ................... mid slope
-        bright-red core ......... the high mountains
-  * island_terrain_texture.jpg -- satellite texture, planar-projected on top.
+Macro shape comes from the simplified contour guideline (peak location, coast,
+ocean rim); fine relief (rugged ridges + dendritic erosion valleys, at roughly
+the level of detail in the reference image) is generated procedurally and
+carved with a hydraulic-erosion pass. See terrain.py for the field builder.
 
-Elevation scheme (UNITS = METERS, altitude on +Y, sea level Y = 0):
-    domain boundary (outer polygon) : -1500   (lowest ocean floor)
-    coastline       (pink edge)     :     0   (sea level)
-    red edge                        :  +500
-    bright-red edge                 : +1000
-    mountain peak (core interior)   : +1500   (highest mountain)
+Units: METERS. Altitude on +Y. Sea level Y = 0.
+Highest mountain = +1500 m. Ocean-floor rim (outer contour = model limit) =
+-1500 m, with the sea bed gently sloping from the island out to that rim.
 
-Between contours the surface is interpolated smoothly using Euclidean
-distance transforms (ratio of distance to the bounding contours), giving a
-continuous terrain rather than stepped terraces.
-
-The result is a watertight terrain tile: the elevation surface on top, a skirt
-around the perimeter, and a flat base just below the ocean floor.
-
-Only the vertical scale is fixed by the spec. TARGET_MAX_EXTENT_M sets the
-horizontal size (island ~= a real volcanic island; edit freely).
+The mesh is clipped to the outer contour (the model limit) and closed into a
+watertight solid: terrain surface on top, a vertical skirt around the rim, and
+a flat base just below the ocean floor.
 """
-import json, numpy as np, trimesh
-from PIL import Image
-from scipy.ndimage import distance_transform_edt
+import numpy as np, trimesh
+from scipy.spatial import Delaunay
+from matplotlib.path import Path
+import terrain as T
 
-# ---------- parameters ----------
-PEAK_Y   =  1500.0   # highest mountain
-FLOOR_Y  = -1500.0   # lowest ocean floor
-SEA_Y    =     0.0   # sea level
-LAND_LEVELS = [0.0, 500.0, 1000.0]   # elevations at pink / red / brightred edges
-TARGET_MAX_EXTENT_M = 20000.0        # horizontal size (largest domain dimension)
-GRID = 420                           # grid resolution along the larger axis
-BASE_BELOW = 100.0                   # base plane sits this far below FLOOR_Y
-TEXTURE = "island_terrain_texture.jpg"
+BASE_BELOW = 80.0          # base plane below the ocean floor
+EDGE_MARGIN = 0.45         # drop interior nodes this close (in cells) to the rim
 
-# ---------- load + place contours in model space (meters, Y up) ----------
-C = json.load(open("contours.json"))
-dom = np.array(C["domain"])
-cx, cy = dom[:,0].mean(), dom[:,1].mean()
-x0,y0,x1,y1 = dom[:,0].min(),dom[:,1].min(),dom[:,0].max(),dom[:,1].max()
-scale = TARGET_MAX_EXTENT_M / max(x1-x0, y1-y0)      # meters per pdf-point
+def resample_loop(poly, step):
+    poly = np.asarray(poly)
+    if np.allclose(poly[0], poly[-1]): poly = poly[:-1]
+    out = []
+    n = len(poly)
+    for i in range(n):
+        a = poly[i]; b = poly[(i+1) % n]
+        L = np.hypot(*(b-a)); k = max(1, int(round(L/step)))
+        for t in np.linspace(0, 1, k, endpoint=False):
+            out.append(a + (b-a)*t)
+    return np.array(out)
 
-def to_model(pl):
-    pl = np.asarray(pl)
-    X = (pl[:,0]-cx)*scale
-    Z = (cy-pl[:,1])*scale                            # flip y -> north up
-    return np.column_stack([X, Z])
+def build_mesh(use_cache=False):
+    import os, pickle
+    cache = "field_cache.pkl"
+    if use_cache and os.path.exists(cache):
+        d = pickle.load(open(cache, "rb"))
+    else:
+        d = T.build_field()
+        pickle.dump(d, open(cache, "wb"))
+    E, xs, zs = d["E"], d["xs"], d["zs"]
+    nx, nz = d["nx"], d["nz"]
+    dom = d["dom"]
+    dx = xs[1]-xs[0]
 
-domain = to_model(C["domain"]); pink = to_model(C["pink"])
-red    = to_model(C["red"]);    peak = to_model(C["peak"])
+    XX, ZZ = np.meshgrid(xs, zs)
+    inside = d["m_dom"]
+    # shrink mask slightly so interior nodes stay clear of the rim loop
+    from scipy.ndimage import binary_erosion
+    core = binary_erosion(inside, iterations=1)
+    ii = np.where(core.ravel())[0]
+    ipts = np.column_stack([XX.ravel()[ii], ZZ.ravel()[ii]])
+    iy = E.ravel()[ii]
 
-Xmin,Xmax = domain[:,0].min(),domain[:,0].max()
-Zmin,Zmax = domain[:,1].min(),domain[:,1].max()
-aspect = (Zmax-Zmin)/(Xmax-Xmin)
-if aspect >= 1: nz, nx = GRID, max(2,int(round(GRID/aspect)))
-else:           nx, nz = GRID, max(2,int(round(GRID*aspect)))
+    loop = resample_loop(dom, dx)                 # ordered rim, lowest elevation
+    ly = np.full(len(loop), T.FLOOR_Y)
 
-xs = np.linspace(Xmin,Xmax,nx)
-zs = np.linspace(Zmin,Zmax,nz)
+    pts2d = np.vstack([ipts, loop])
+    yvals = np.concatenate([iy, ly])
+    n_interior = len(ipts)
+    loop_ids = np.arange(n_interior, n_interior+len(loop))
 
-def mask(poly):
-    img = Image.new("1",(nx,nz),0)
-    from PIL import ImageDraw
-    d = ImageDraw.Draw(img)
-    cols = (poly[:,0]-Xmin)/(Xmax-Xmin)*(nx-1)
-    rows = (poly[:,1]-Zmin)/(Zmax-Zmin)*(nz-1)
-    d.polygon(list(zip(cols.tolist(),rows.tolist())), fill=1)
-    return np.array(img,dtype=bool)
+    # convex domain: Delaunay of (interior + rim loop) tiles the octagon exactly
+    tri = Delaunay(pts2d)
+    faces = tri.simplices.tolist()
+    top = np.column_stack([pts2d[:,0], yvals, pts2d[:,1]])
 
-m_dom  = mask(domain)
-m_pink = mask(pink) & m_dom
-m_red  = mask(red)  & m_dom
-m_peak = mask(peak) & m_dom
+    # actual boundary of the top surface = edges used by exactly one triangle
+    from collections import defaultdict
+    ec = defaultdict(int); en = defaultdict(list)
+    for a,b,c in faces:
+        for u,v in ((a,b),(b,c),(c,a)):
+            k=(min(u,v),max(u,v)); ec[k]+=1
+    bedges=[k for k,n in ec.items() if n==1]
+    adj=defaultdict(list)
+    for u,v in bedges: adj[u].append(v); adj[v].append(u)
+    start=bedges[0][0]; loop_order=[start]; prev=None; cur=start
+    while True:
+        nxts=[w for w in adj[cur] if w!=prev]
+        if not nxts: break
+        nxt=nxts[0]
+        if nxt==start: break
+        loop_order.append(nxt); prev,cur=cur,nxt
+    # base vertices under each boundary vertex
+    base_off=len(top)
+    base=top[loop_order].copy(); base[:,1]=T.FLOOR_Y-BASE_BELOW
+    bmap={vid:base_off+i for i,vid in enumerate(loop_order)}
+    F=[tuple(f) for f in faces]
+    P=len(loop_order)
+    for i in range(P):                             # skirt
+        a=loop_order[i]; b=loop_order[(i+1)%P]
+        F.append((a,b,bmap[b])); F.append((a,bmap[b],bmap[a]))
+    for k in range(1,P-1):                          # base fan
+        F.append((base_off,base_off+k+1,base_off+k))
 
-# ---------- elevation field via distance-transform interpolation ----------
-def Din(m):  return distance_transform_edt(m)          # inside -> dist to boundary
-def Dout(m): return distance_transform_edt(~m)         # outside -> dist to region
+    verts=np.vstack([top,base]); faces=np.array(F)
+    mesh=trimesh.Trimesh(vertices=verts,faces=faces,process=True)
+    mesh.fix_normals()
+    trimesh.repair.fill_holes(mesh)
+    return mesh, d
 
-E = np.full((nz,nx), FLOOR_Y, float)                   # default: ocean floor
-
-# ocean ring: inside domain, outside land (pink)
-ocean = m_dom & ~m_pink
-d_coast = Dout(m_pink); d_edge = Din(m_dom)
-t = d_coast/(d_coast+d_edge+1e-9)
-E[ocean] = SEA_Y + t[ocean]*(FLOOR_Y-SEA_Y)
-
-# ring pink->red : LAND_LEVELS[0] .. LAND_LEVELS[1]
-r1 = m_pink & ~m_red
-a = Din(m_pink); b = Dout(m_red); t = a/(a+b+1e-9)
-E[r1] = LAND_LEVELS[0] + t[r1]*(LAND_LEVELS[1]-LAND_LEVELS[0])
-
-# ring red->brightred : LAND_LEVELS[1] .. LAND_LEVELS[2]
-r2 = m_red & ~m_peak
-a = Din(m_red); b = Dout(m_peak); t = a/(a+b+1e-9)
-E[r2] = LAND_LEVELS[1] + t[r2]*(LAND_LEVELS[2]-LAND_LEVELS[1])
-
-# peak dome : LAND_LEVELS[2] .. PEAK_Y
-dp = Din(m_peak); dpmax = dp.max() if dp.max()>0 else 1.0
-E[m_peak] = LAND_LEVELS[2] + (dp[m_peak]/dpmax)*(PEAK_Y-LAND_LEVELS[2])
-
-# gentle smoothing to remove rasterization stairstep (keeps extremes)
-from scipy.ndimage import gaussian_filter
-E = gaussian_filter(E, sigma=1.2)
-E[m_peak] = np.maximum(E[m_peak], LAND_LEVELS[2])      # don't sink the peak band
-E = np.clip(E, FLOOR_Y, PEAK_Y)
-pos = E > 0                                            # pin highest point to +1500 exactly
-if pos.any() and E[pos].max() > 0: E[pos] *= PEAK_Y/E[pos].max()
-
-# ---------- build watertight mesh ----------
-XX,ZZ = np.meshgrid(xs,zs)
-top = np.column_stack([XX.ravel(), E.ravel(), ZZ.ravel()])
-def vid(i,j): return i*nx+j                            # i=row(z), j=col(x)
-faces=[]
-for i in range(nz-1):
-    for j in range(nx-1):
-        a,b,c,d = vid(i,j),vid(i,j+1),vid(i+1,j+1),vid(i+1,j)
-        faces.append((a,b,c)); faces.append((a,c,d))
-V=[top]; nfix=len(top)
-BASE_Y=FLOOR_Y-BASE_BELOW
-# perimeter (clockwise) top-vertex ids
-perim=[vid(0,j) for j in range(nx)]+[vid(i,nx-1) for i in range(1,nz)]+\
-      [vid(nz-1,j) for j in range(nx-2,-1,-1)]+[vid(i,0) for i in range(nz-2,0,-1)]
-base=top[perim].copy(); base[:,1]=BASE_Y
-base_off=nfix
-V.append(base)
-P=len(perim)
-for k in range(P):
-    a=perim[k]; b=perim[(k+1)%P]; c=base_off+((k+1)%P); d=base_off+k
-    faces.append((a,b,c)); faces.append((a,c,d))       # skirt
-for k in range(1,P-1):                                 # base fan
-    faces.append((base_off,base_off+k+1,base_off+k))
-verts=np.vstack(V); faces=np.array(faces)
-
-# ---------- UVs (planar top-down; texture spans domain bbox) ----------
-uv=np.zeros((len(verts),2))
-uv[:nfix,0]=(top[:,0]-Xmin)/(Xmax-Xmin)
-uv[:nfix,1]=(top[:,2]-Zmin)/(Zmax-Zmin)
-uv[base_off:,0]=np.clip((base[:,0]-Xmin)/(Xmax-Xmin),0,1)
-uv[base_off:,1]=np.clip((base[:,2]-Zmin)/(Zmax-Zmin),0,1)
-
-img=Image.open(TEXTURE).convert("RGB")
-mat=trimesh.visual.texture.SimpleMaterial(image=img)
-mesh=trimesh.Trimesh(vertices=verts,faces=faces,
-      visual=trimesh.visual.TextureVisuals(uv=uv,image=img,material=mat),
-      process=False)
-mesh.fix_normals()
-
-if __name__=="__main__":
-    print(f"grid {nx} x {nz} | horiz extent {Xmax-Xmin:.0f} x {Zmax-Zmin:.0f} m")
-    print(f"elevation min/max: {E.min():.0f} / {E.max():.0f} m (sea level = 0)")
-    print(f"verts {len(verts)} | faces {len(faces)} | watertight {mesh.is_watertight}")
+if __name__ == "__main__":
+    mesh, d = build_mesh(use_cache=True)
+    y = mesh.vertices[:,1]
+    print(f"verts {len(mesh.vertices)} | faces {len(mesh.faces)} | watertight {mesh.is_watertight}")
+    print(f"elevation min/max: {y.min():.0f} / {y.max():.0f} m (sea level 0)")
+    print(f"extent: {mesh.bounds[1,0]-mesh.bounds[0,0]:.0f} x {mesh.bounds[1,2]-mesh.bounds[0,2]:.0f} m")
+    mesh.export("island_terrain.obj")
     mesh.export("island_terrain.glb")
-    mesh.export("island_terrain.obj")     # writes .obj + .mtl + texture
-    np.save("elevation_grid.npy", E)
-    print("wrote island_terrain.obj / .mtl / .glb")
+    print("wrote island_terrain.obj / .glb")

@@ -1,25 +1,40 @@
-<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#0a0e14;overflow:hidden}</style>
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#070b10;overflow:hidden}</style>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 </head><body>
 <script type="module">
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-const W=1400,H=900;
+const W=1500,H=1000;
 const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
 r.setSize(W,H); document.body.appendChild(r.domElement);
-const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0a0e14);
-const cam=new THREE.PerspectiveCamera(42,W/H,1,200000);
-scene.add(new THREE.HemisphereLight(0xcfe6ff,0x20303a,0.9));
-const sun=new THREE.DirectionalLight(0xffffff,1.6); sun.position.set(-12000,16000,8000); scene.add(sun);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x070b10);
+const cam=new THREE.PerspectiveCamera(40,W/H,1,300000);
+scene.add(new THREE.HemisphereLight(0xbfd4ff,0x101418,0.7));
+const sun=new THREE.DirectionalLight(0xfff2e0,2.2); sun.position.set(-14000,13000,7000); scene.add(sun);
+function colorFor(y){
+  const c=new THREE.Color();
+  if(y<0){const t=Math.min(1,-y/1500); c.setRGB(0.16-0.10*t,0.34-0.18*t,0.55-0.22*t);}
+  else{const t=y/1500;
+    if(t<0.06) c.setRGB(0.86,0.80,0.55);            // beach
+    else if(t<0.5){const s=(t-0.06)/0.44; c.setRGB(0.28+0.15*s,0.5-0.18*s,0.2);} // green->brown
+    else{const s=(t-0.5)/0.5; c.setRGB(0.43+0.4*s,0.32+0.42*s,0.18+0.6*s);}      // brown->white
+  }
+  return c;
+}
 new GLTFLoader().load('island_terrain.glb',(g)=>{
-  const m=g.scene; scene.add(m);
+  const m=g.scene; let mesh;
+  m.traverse(o=>{if(o.isMesh)mesh=o;});
+  const geo=mesh.geometry; geo.computeVertexNormals();
+  const pos=geo.attributes.position; const col=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){const c=colorFor(pos.getY(i)); col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;}
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  mesh.material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.95,metalness:0.0,flatShading:false});
   const box=new THREE.Box3().setFromObject(m); const c=box.getCenter(new THREE.Vector3()); const s=box.getSize(new THREE.Vector3());
   m.position.sub(c);
   const d=Math.max(s.x,s.z);
-  cam.position.set(d*0.62,d*0.55,d*0.72); cam.lookAt(0,0,0);
-  // subtle vertical exaggeration for the preview only
-  m.scale.y=1.0;
-  r.render(scene,cam);
-  window.__done=true;
-},undefined,(e)=>{document.title='ERR '+e;});
+  const v=(new URLSearchParams(location.search)).get('v')||'iso';
+  if(v==='top'){cam.position.set(0,d*1.15,0.01);}
+  else{cam.position.set(d*0.6,d*0.5,d*0.72);}
+  cam.lookAt(0,0,0); r.render(scene,cam); window.__done=true;
+},undefined,e=>{document.title='ERR';});
 </script></body></html>
