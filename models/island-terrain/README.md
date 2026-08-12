@@ -15,9 +15,15 @@ coast is, the model boundary), **not** as exact contours. The fine relief is
 generated to match the **level of detail** in the reference image
 (`reference_detail_level.jpg`), which is a detail reference, **not** a texture.
 
+The **outer outline is the octagonal table boundary** (`Elevations_with_Final_Table.pdf`);
+its inch dimensions (5'-8¹¹⁄₁₆, 2'-0⅞, 2'-8²⁵⁄₃₂, 3'-6²⁷⁄₃₂, 5'-10¾, 3'-7¹⁷⁄₃₂ …)
+are reference-only — the model keeps the standard scaling (largest extent →
+`TARGET_MAX_EXTENT_M`). There is no blue ocean in that PDF: everything between
+the octagon outline and the outermost (pink) contour is treated as ocean.
+
 Pipeline (`terrain.py` builds the field, `generate.py` meshes it):
 1. **Macro shape** from the contours via distance-transform interpolation:
-   ocean rim −1500 m → coast 0 m → interior rising toward the peak.
+   ocean rim (octagon outline) −1500 m → coast (pink) 0 m → interior rising toward the peak.
 2. **Procedural detail** — domain-warped **ridged** multifractal + fractal
    (fBm) noise, amplitude strong on land (esp. upper slopes) and gentle
    undersea, for rugged ridges and rolling relief.
@@ -46,6 +52,6 @@ python3 terrain.py           # optional: elevation/hillshade/section check
 - `island_terrain.glb` — compact single-file version for quick viewing
 - `terrain.py` — heightfield generator (noise + erosion; tune params at top)
 - `generate.py` — meshing, octagon clip, watertight solid, export
-- `contours.json` — macro contour polygons from the guideline PDF
+- `contours.json` — octagon outline + island contours from the guideline PDF
 - `reference_detail_level.jpg` — the detail-level reference (not a texture)
 - `verify_3d.png` / `verify_field.png` — self-check renders
